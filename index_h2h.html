@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kalkulator HDP & Over/Under + Performa</title>
+<style>
+body{font-family:Arial,sans-serif;background:#f6f6f6;padding:20px;}
+.container{max-width:480px;margin:auto;background:#fff;padding:20px;border-radius:10px;
+           box-shadow:0 2px 6px rgba(0,0,0,0.2);}
+h2{text-align:center}
+label{display:block;margin-top:10px;font-weight:bold}
+textarea,input{width:100%;padding:8px;margin-top:5px;box-sizing:border-box;}
+button{margin-top:15px;padding:10px;width:100%;background:#4CAF50;color:#fff;
+       border:none;border-radius:6px;font-size:16px;cursor:pointer;}
+button:hover{background:#45a049;}
+.result{margin-top:15px;padding:12px;background:#eef;border-radius:6px;white-space:pre-wrap;}
+</style>
+</head>
+<body>
+<div class="container">
+<h2>Analisis HDP & Over/Under</h2>
+
+<label>Odds HDP (Home)</label>
+<input type="number" id="hdpHome" step="0.01" placeholder="Contoh: 1.90">
+
+<label>Odds HDP (Away)</label>
+<input type="number" id="hdpAway" step="0.01" placeholder="Contoh: 2.00">
+
+<label>Odds Over</label>
+<input type="number" id="over" step="0.01" placeholder="Contoh: 1.95">
+
+<label>Odds Under</label>
+<input type="number" id="under" step="0.01" placeholder="Contoh: 1.90">
+
+<label>Performa Tim (catat 5 laga terakhir)</label>
+<textarea id="formHome" placeholder="Home: W W D L W"></textarea>
+<textarea id="formAway" placeholder="Away: L D W W L"></textarea>
+
+<label>Head to Head (hasil pertemuan terakhir)</label>
+<textarea id="h2h" placeholder="Contoh: Home 2-1 Away, Away 1-1 Home"></textarea>
+
+<button onclick="analisis()">Analisis</button>
+<div class="result" id="hasil">Hasil akan muncul di sini</div>
+</div>
+
+<script>
+function analisis(){
+  const hH = parseFloat(document.getElementById('hdpHome').value);
+  const hA = parseFloat(document.getElementById('hdpAway').value);
+  const o = parseFloat(document.getElementById('over').value);
+  const u = parseFloat(document.getElementById('under').value);
+  const fH = document.getElementById('formHome').value.trim();
+  const fA = document.getElementById('formAway').value.trim();
+  const h2h = document.getElementById('h2h').value.trim();
+
+  if([hH,hA,o,u].some(isNaN)){
+    document.getElementById('hasil').innerText = "⚠️ Masukkan semua odds.";
+    return;
+  }
+
+  let msg = "";
+  msg += (hH < hA) ? "⚽ HDP: Home lebih menarik\n" :
+         (hH > hA) ? "⚽ HDP: Away lebih menarik\n" :
+         "⚽ HDP: Seimbang\n";
+  msg += (o < u) ? "🔥 Over cenderung kuat\n" :
+         (o > u) ? "❄️ Under cenderung kuat\n" :
+         "📊 Over/Under: Seimbang\n";
+
+  if(fH) msg += "\n📈 Performa Home: " + fH;
+  if(fA) msg += "\n📉 Performa Away: " + fA;
+  if(h2h) msg += "\n🔁 Head-to-Head: " + h2h;
+
+  document.getElementById('hasil').innerText = msg;
+}
+</script>
+</body>
+</html>
