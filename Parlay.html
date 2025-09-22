@@ -1,0 +1,225 @@
+<!DOCTYPE html><html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kalkulator HDP & Over/Under + Probabilitas Lengkap</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+body{font-family:Arial,sans-serif;background:#f6f6f6;padding:20px;}
+.container{max-width:700px;margin:auto;background:#fff;padding:20px;border-radius:10px;
+           box-shadow:0 2px 6px rgba(0,0,0,0.12);} 
+h2{text-align:center}
+label{display:block;margin-top:10px;font-weight:bold}
+textarea,input,select{width:100%;padding:8px;margin-top:5px;box-sizing:border-box;border:1px solid #ddd;border-radius:6px}
+button{margin-top:15px;padding:10px;width:100%;background:#4CAF50;color:#fff;
+       border:none;border-radius:6px;font-size:16px;cursor:pointer}
+button:hover{background:#45a049}
+.result{margin-top:15px;padding:12px;background:#eef;border-radius:6px;white-space:pre-wrap}
+.probs{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap}
+.prob-card{flex:1 1 45%;padding:10px;border-radius:6px;background:#fff;border:1px solid #e0e0e0;text-align:center;min-width:120px}
+.small{font-size:13px;color:#666}
+.chart-container{margin-top:20px}
+canvas{max-width:100%;height:auto}
+.rekomendasi{margin-top:10px;font-weight:bold;padding:8px;border-radius:6px;text-align:center;cursor:help;position:relative}
+.rekom-yes{background:#e8f5e9;color:#2e7d32}
+.rekom-no{background:#ffebee;color:#c62828}
+.rekom-balance{background:#e3f2fd;color:#1565c0}
+.rekomendasi .info-icon{margin-left:6px;font-size:14px;cursor:help;color:#555}
+#ringkasan {margin-top:15px; font-weight:bold; font-size:16px; text-align:center; padding:10px; border-radius:6px; background:#fff3cd; color:#856404;}
+</style>
+</head>
+<body>
+<div class="container">
+<h2>Analisis HDP, Over/Under & Probabilitas Lengkap</h2><label>Odds HDP (Home)</label> <input type="number" id="hdpHome" step="0.01" placeholder="Contoh: 1.90">
+
+<label>Odds HDP (Away)</label> <input type="number" id="hdpAway" step="0.01" placeholder="Contoh: 2.00">
+
+<label>Odds Over</label> <input type="number" id="over" step="0.01" placeholder="Contoh: 1.95">
+
+<label>Odds Under</label> <input type="number" id="under" step="0.01" placeholder="Contoh: 1.90">
+
+<label>Odds 1X2</label> <input type="number" id="oddsHome1x2" step="0.01" placeholder="Home Win (mis: 2.10)"> <input type="number" id="oddsDraw1x2" step="0.01" placeholder="Draw (mis: 3.20)"> <input type="number" id="oddsAway1x2" step="0.01" placeholder="Away Win (mis: 3.50)">
+
+<label>Performa Tim (catat laga terakhir)</label>
+
+<textarea id="formHome" placeholder="Home: W W D L W"></textarea><textarea id="formAway" placeholder="Away: L D W W L"></textarea><label>Pilih jumlah laga terakhir yang dianalisis</label> <select id="matchCount">
+
+  <option value="5">5 laga</option>
+  <option value="10">10 laga</option>
+  <option value="all">Semua yang diinput</option>
+</select><label>Total Gol & Kebobolan (Home)</label> <input type="number" id="golHome" placeholder="Total gol Home"> <input type="number" id="kebobolanHome" placeholder="Total kebobolan Home">
+
+<label>Total Gol & Kebobolan (Away)</label> <input type="number" id="golAway" placeholder="Total gol Away"> <input type="number" id="kebobolanAway" placeholder="Total kebobolan Away">
+
+<label>Head to Head (hasil pertemuan terakhir)</label>
+
+<textarea id="h2h" placeholder="Contoh: Home 2-1 Away, Away 1-1 Home"></textarea><label>Pengaturan Perhitungan Probabilitas</label> <select id="probMode">
+
+  <option value="auto">Otomatis (70% odds + 30% performa)</option>
+  <option value="odds">Hanya Odds</option>
+  <option value="form">Hanya Performa</option>
+  <option value="manual">Manual (isi bobot sendiri)</option>
+</select><div id="manualWeights" style="display:none;margin-top:8px">
+  <label>Bobot Odds (%)</label>
+  <input type="number" id="weightOdds" value="60">
+  <label>Bobot Performa (%)</label>
+  <input type="number" id="weightForm" value="40">
+</div><button onclick="analisis()">Analisis</button>
+
+<div class="result" id="hasil">Hasil akan muncul di sini</div><div id="ringkasan">Ringkasan Prediksi: --</div><div class="result" id="probabilities" style="display:none">
+  <div style="font-weight:bold">Probabilitas Menang</div>
+  <div class="probs">
+    <div class="prob-card"><div id="homeProb">--%</div><div class="small">Home Win</div></div>
+    <div class="prob-card"><div id="drawProb">--%</div><div class="small">Draw</div></div>
+    <div class="prob-card"><div id="awayProb">--%</div><div class="small">Away Win</div></div>
+  </div>
+  <div class="chart-container"><canvas id="chart1x2"></canvas></div>
+  <div id="rekom1x2" class="rekomendasi"></div>  <div style="font-weight:bold;margin-top:15px">Probabilitas Over/Under</div>
+  <div class="probs">
+    <div class="prob-card"><div id="overProb">--%</div><div class="small">Over</div></div>
+    <div class="prob-card"><div id="underProb">--%</div><div class="small">Under</div></div>
+  </div>
+  <div class="chart-container"><canvas id="chartOU"></canvas></div>
+  <div id="rekomOU" class="rekomendasi"></div>  <div style="font-weight:bold;margin-top:15px">Probabilitas BTTS</div>
+  <div class="probs">
+    <div class="prob-card"><div id="bttsYesProb">--%</div><div class="small">BTTS Yes</div></div>
+    <div class="prob-card"><div id="bttsNoProb">--%</div><div class="small">BTTS No</div></div>
+  </div>
+  <div class="chart-container"><canvas id="chartBTTS"></canvas></div>
+  <div id="rekomBTTS" class="rekomendasi"></div>  <div style="font-weight:bold;margin-top:15px">Tren Performa Tim</div>
+  <div class="chart-container"><canvas id="chartForm"></canvas></div>
+</div></div><script>
+let chart1x2, chartOU, chartBTTS, chartForm;
+
+function renderChart(ctx, labels, data, chartRef, type='pie'){
+  if(chartRef) chartRef.destroy();
+  return new Chart(ctx, {
+    type: type,
+    data: { labels: labels, datasets: [{ data: data, backgroundColor:["#4CAF50","#FFC107","#2196F3","#9C27B0","#FF5722"] }]},
+    options: { responsive:true, plugins:{ legend:{position:'bottom'} } }
+  });
+}
+
+function parseFormTrend(formText, matchCount){
+  if(!formText) return [];
+  let tokens = formText.trim().split(/\s+/).filter(Boolean);
+  if(matchCount!=="all"){
+    tokens = tokens.slice(0,parseInt(matchCount));
+  }
+  return tokens.map(t => {
+    const c=t.toUpperCase();
+    if(c==='W') return 3;
+    if(c==='D') return 1;
+    return 0;
+  });
+}
+
+function setRekomendasi(el, text, type, tooltip){
+  el.className = "rekomendasi";
+  if(type==="yes") el.classList.add("rekom-yes");
+  else if(type==="no") el.classList.add("rekom-no");
+  else el.classList.add("rekom-balance");
+  el.innerHTML = text + ' <span class="info-icon">ℹ️</span>';
+  el.title = tooltip;
+}
+
+function analisis(){
+  const o = parseFloat(document.getElementById('over').value);
+  const u = parseFloat(document.getElementById('under').value);
+  const oneX2H = parseFloat(document.getElementById('oddsHome1x2').value);
+  const oneX2D = parseFloat(document.getElementById('oddsDraw1x2').value);
+  const oneX2A = parseFloat(document.getElementById('oddsAway1x2').value);
+  const matchCount = document.getElementById('matchCount').value;
+  const golHome = parseFloat(document.getElementById('golHome').value);
+  const kebobolanHome = parseFloat(document.getElementById('kebobolanHome').value);
+  const golAway = parseFloat(document.getElementById('golAway').value);
+  const kebobolanAway = parseFloat(document.getElementById('kebobolanAway').value);
+
+  const probsEl = document.getElementById('probabilities');
+  probsEl.style.display = 'block';
+
+  let summary = [];
+
+  // ---- Probabilitas 1X2 ----
+  if(!isNaN(oneX2H) && !isNaN(oneX2D) && !isNaN(oneX2A)){
+    const impH = 1/oneX2H, impD = 1/oneX2D, impA = 1/oneX2A;
+    const sum = impH+impD+impA;
+    const pH=(impH/sum)*100, pD=(impD/sum)*100, pA=(impA/sum)*100;
+    document.getElementById('homeProb').innerText = pH.toFixed(1)+"%";
+    document.getElementById('drawProb').innerText = pD.toFixed(1)+"%";
+    document.getElementById('awayProb').innerText = pA.toFixed(1)+"%";
+    chart1x2 = renderChart(document.getElementById('chart1x2'),["Home","Draw","Away"],[pH,pD,pA],chart1x2);
+
+    if(pH>50){
+      setRekomendasi(document.getElementById('rekom1x2'),"🔥 Rekomendasi: Home Win lebih unggul","yes","Home punya probabilitas lebih dari 50% berdasarkan odds");
+      summary.push("Home Win");
+    } else if(pA>50){
+      setRekomendasi(document.getElementById('rekom1x2'),"🔥 Rekomendasi: Away Win lebih unggul","yes","Away punya probabilitas lebih dari 50% berdasarkan odds");
+      summary.push("Away Win");
+    } else if(pD>40){
+      setRekomendasi(document.getElementById('rekom1x2'),"⚖️ Rekomendasi: Draw punya peluang besar","balance","Probabilitas hasil imbang relatif tinggi (>40%)");
+      summary.push("Draw");
+    } else {
+      setRekomendasi(document.getElementById('rekom1x2'),"⚖️ Rekomendasi: Pertandingan seimbang","balance","Tidak ada tim yang dominan berdasarkan probabilitas");
+    }
+  }
+
+  // ---- Probabilitas Over/Under ----
+  if(!isNaN(o)&&!isNaN(u)){
+    const impO=1/o, impU=1/u, sumOU=impO+impU;
+    const pO=(impO/sumOU)*100, pU=(impU/sumOU)*100;
+    document.getElementById('overProb').innerText=pO.toFixed(1)+"%";
+    document.getElementById('underProb').innerText=pU.toFixed(1)+"%";
+    chartOU = renderChart(document.getElementById('chartOU'),["Over","Under"],[pO,pU],chartOU);
+
+    if(pO>60){
+      setRekomendasi(document.getElementById('rekomOU'),"🔥 Rekomendasi: Over lebih kuat","yes","Probabilitas Over lebih dari 60%");
+      summary.push("Over");
+    } else if(pU>60){
+      setRekomendasi(document.getElementById('rekomOU'),"❄️ Rekomendasi: Under lebih aman","no","Probabilitas Under lebih dari 60%");
+      summary.push("Under");
+    } else {
+      setRekomendasi(document.getElementById('rekomOU'),"⚖️ Rekomendasi: Over/Under seimbang","balance","Probabilitas Over dan Under relatif seimbang");
+    }
+  }
+
+  // ---- Probabilitas BTTS ----
+  if(!isNaN(golHome)&&!isNaN(kebobolanHome)&&!isNaN(golAway)&&!isNaN(kebobolanAway)){
+    const totalMatches = (matchCount==="all")? 5 : parseInt(matchCount);
+    const avgGoalsHome = golHome/totalMatches;
+    const avgConcedeHome = kebobolanHome/totalMatches;
+    const avgGoalsAway = golAway/totalMatches;
+    const avgConcedeAway = kebobolanAway/totalMatches;
+
+    let score = (avgGoalsHome*avgConcedeAway + avgGoalsAway*avgConcedeHome);
+    let pYes = score/(score+1);
+    let pNo = 1-pYes;
+
+    document.getElementById('bttsYesProb').innerText=(pYes*100).toFixed(1)+"%";
+    document.getElementById('bttsNoProb').innerText=(pNo*100).toFixed(1)+"%";
+    chartBTTS = renderChart(document.getElementById('chartBTTS'),["BTTS Yes","BTTS No"],[pYes*100,pNo*100],chartBTTS);
+
+    if(pYes>0.6){
+      setRekomendasi(document.getElementById('rekomBTTS'),"🔥 Rekomendasi: BTTS Yes kuat","yes","Kedua tim cenderung mencetak dan kebobolan gol sehingga peluang BTTS Yes tinggi");
+      summary.push("BTTS Yes");
+    } else if(pYes<0.4){
+      setRekomendasi(document.getElementById('rekomBTTS'),"❄️ Rekomendasi: BTTS No lebih aman","no","Salah satu tim cenderung lemah dalam mencetak gol atau kuat bertahan");
+      summary.push("BTTS No");
+    } else {
+      setRekomendasi(document.getElementById('rekomBTTS'),"⚖️ Rekomendasi: BTTS seimbang","balance","Peluang BTTS Yes dan No relatif berimbang");
+    }
+  }
+
+  // ---- Ringkasan ----
+  document.getElementById('ringkasan').innerText = "Ringkasan Prediksi: " + (summary.length>0 ? summary.join(" & ") : "--");
+
+  // ---- Tren Performa Tim ----
+  const fH = document.getElementById('formHome').value.trim();
+  const fA = document.getElementById('formAway').value.trim();
+  const trendH = parseFormTrend(fH, matchCount);
+  const trendA = parseFormTrend(fA, matchCount);
+  if(trendH.length>0 || trendA.length>0){
+    const labels = Array.from({length:Math.max(trendH.length,trendA.length)},(_,i)=>"Laga "+(i+1));
+    if(chartForm) chartForm.destroy();
+    chartForm = new Chart(document.getElementById('chartForm'),{
+      type:'
