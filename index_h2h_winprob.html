@@ -1,0 +1,145 @@
+<!DOCTYPE html><html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kalkulator HDP & Over/Under + Performa + Win Prob</title>
+<style>
+body{font-family:Arial,sans-serif;background:#f6f6f6;padding:20px;color:#222}
+.container{max-width:640px;margin:auto;background:#fff;padding:20px;border-radius:10px;
+           box-shadow:0 2px 8px rgba(0,0,0,0.12);} 
+h2{text-align:center;margin:0 0 10px}
+label{display:block;margin-top:10px;font-weight:700}
+textarea,input{width:100%;padding:8px;margin-top:5px;box-sizing:border-box;border:1px solid #ddd;border-radius:6px}
+button{margin-top:15px;padding:10px;width:100%;background:#4CAF50;color:#fff;
+       border:none;border-radius:6px;font-size:16px;cursor:pointer}
+button:hover{background:#45a049}
+.result{margin-top:15px;padding:12px;background:#f0f8ff;border-radius:6px;white-space:pre-wrap}
+.probbar{height:14px;background:#eee;border-radius:8px;overflow:hidden;margin-top:6px}
+.probfill{height:100%;background:linear-gradient(90deg,#4caf50,#81c784);}
+.small{font-size:13px;color:#555}
+</style>
+</head>
+<body>
+<div class="container">
+<h2>Analisis HDP & Over/Under + Win Probability</h2><label>Odds HDP (Home)</label> <input type="number" id="hdpHome" step="0.01" placeholder="Contoh: 1.90">
+
+<label>Odds HDP (Away)</label> <input type="number" id="hdpAway" step="0.01" placeholder="Contoh: 2.00">
+
+<label>Odds Over</label> <input type="number" id="over" step="0.01" placeholder="Contoh: 1.95">
+
+<label>Odds Under</label> <input type="number" id="under" step="0.01" placeholder="Contoh: 1.90">
+
+<label>Performa Tim (catat 5 laga terakhir)</label>
+
+<textarea id="formHome" placeholder="Home: W W D L W"></textarea><textarea id="formAway" placeholder="Away: L D W W L"></textarea><label>Head to Head (hasil pertemuan terakhir, setiap baris satu match, format bebas, contoh: Home 2-1 Away)</label>
+
+<textarea id="h2h" placeholder="Contoh: Home 2-1 Away, Away 1-1 Home"></textarea><button onclick="analisis()">Analisis</button>
+
+<div class="result" id="hasil">Hasil akan muncul di sini</div>
+</div><script>
+function parseForm(text){
+  if(!text) return null;
+  const tokens = text.toUpperCase().replace(/[^WDL\s]/g,'').trim().split(/\s+/).filter(Boolean);
+  if(tokens.length===0) return null;
+  let wins=0, draws=0, losses=0;
+  tokens.forEach(t=>{ if(t==='W') wins++; else if(t==='D') draws++; else if(t==='L') losses++; });
+  const matches = wins+draws+losses;
+  const score = (wins + 0.5*draws) / Math.max(matches,1); // 0..1
+  return {wins,draws,losses,matches,score};
+}
+
+function parseH2H(text){
+  if(!text) return null;
+  const lines = text.split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean);
+  let homeWins=0, awayWins=0, draws=0, total=0;
+  lines.forEach(l=>{
+    // try to find scores like 2-1
+    const m = l.match(/(\d+)\s*-\s*(\d+)/);
+    if(m){
+      const a = parseInt(m[1]), b = parseInt(m[2]);
+      total++;
+      if(a>b) homeWins++; else if(b>a) awayWins++; else draws++;
+    }
+  });
+  if(total===0) return null;
+  const score = (homeWins + 0.5*draws)/total;
+  return {homeWins,awayWins,draws,total,score};
+}
+
+function toPercent(x){ return (x*100).toFixed(1)+'%'; }
+
+function analisis(){
+  const hH = parseFloat(document.getElementById('hdpHome').value);
+  const hA = parseFloat(document.getElementById('hdpAway').value);
+  const o = parseFloat(document.getElementById('over').value);
+  const u = parseFloat(document.getElementById('under').value);
+  const fHtxt = document.getElementById('formHome').value.trim();
+  const fAtxt = document.getElementById('formAway').value.trim();
+  const h2htxt = document.getElementById('h2h').value.trim();
+
+  if([hH,hA].some(isNaN)){
+    document.getElementById('hasil').innerText = "⚠️ Masukkan minimal Odds HDP Home dan Away.";
+    return;
+  }
+
+  // Implied probabilities from odds (basic) and normalize
+  const pHomeRaw = 1 / hH;
+  const pAwayRaw = 1 / hA;
+  const totalRaw = pHomeRaw + pAwayRaw;
+  let pHome = pHomeRaw / totalRaw;
+  let pAway = pAwayRaw / totalRaw;
+
+  // Parse form and H2H
+  const formH = parseForm(fHtxt);
+  const formA = parseForm(fAtxt);
+  const h2h = parseH2H(h2htxt);
+
+  // adjustments based on form and h2h (conservative)
+  // form score in [-1,1] diff = formH.score - formA.score
+  let adjHome = 0, adjAway = 0;
+  if(formH && formA){
+    const diff = formH.score - formA.score; // -1..1
+    // scale diff to max +/-8% impact
+    adjHome += diff * 0.08;
+    adjAway -= diff * 0.08;
+  }
+  if(h2h){
+    const diffH2H = h2h.score - 0.5; // positive means home historically better
+    adjHome += diffH2H * 0.06; // up to ~6%
+    adjAway -= diffH2H * 0.06;
+  }
+
+  // apply adjustments and renormalize
+  let ph = Math.max(0.01, pHome + adjHome);
+  let pa = Math.max(0.01, pAway + adjAway);
+  const s = ph+pa;
+  ph = ph/s; pa = pa/s;
+
+  // Over/Under hint
+  let ouMsg = (o && u) ? ((o < u) ? '🔥 Over cenderung kuat' : (o > u) ? '❄️ Under cenderung kuat' : '📊 Over/Under: Seimbang') : '─';
+
+  // build output
+  const lines = [];
+  lines.push('⚽ HDP: ' + ((hH < hA) ? 'Home lebih menarik' : (hH > hA) ? 'Away lebih menarik' : 'Seimbang'));
+  lines.push(ouMsg);
+  if(formH) lines.push('\n📈 Performa Home: ' + formH.wins + 'W ' + formH.draws + 'D ' + formH.losses + 'L  (score=' + formH.score.toFixed(2) + ')');
+  if(formA) lines.push('📉 Performa Away: ' + formA.wins + 'W ' + formA.draws + 'D ' + formA.losses + 'L  (score=' + formA.score.toFixed(2) + ')');
+  if(h2h) lines.push('🔁 Head-to-Head (parsed): ' + h2h.homeWins + '-' + h2h.draws + '-' + h2h.awayWins + ' (total=' + h2h.total + ')');
+
+  lines.push('\n📊 Probabilitas (dari odds, setelah koreksi form & H2H):');
+
+  // create bars using inline HTML
+  const resultDiv = document.getElementById('hasil');
+  resultDiv.innerHTML = lines.join('\n');
+
+  // add probability displays
+  const probHtml = `\n\n<strong>Home win:</strong> ${toPercent(ph)}\n<div class="probbar"><div class="probfill" style="width:${(ph*100).toFixed(1)}%"></div></div>\n\n<strong>Away win:</strong> ${toPercent(pa)}\n<div class="probbar"><div class="probfill" style="width:${(pa*100).toFixed(1)}%"></div></div>`;
+
+  resultDiv.innerHTML += probHtml;
+
+  // raw implied probs for transparency
+  const rawHtml = `\n\n<small class="small">(Implied dari odds tanpa koreksi -> Home: ${toPercent(pHomeRaw/ (pHomeRaw+pAwayRaw))}, Away: ${toPercent(pAwayRaw/(pHomeRaw+pAwayRaw))})</small>`;
+  resultDiv.innerHTML += rawHtml;
+}
+</script></body>
+  </html>
